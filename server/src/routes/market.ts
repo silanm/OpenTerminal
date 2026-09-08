@@ -9,12 +9,19 @@ import * as tradingview from "../providers/tradingview.js";
 import * as coingecko from "../providers/coingecko.js";
 import * as binance from "../providers/binance.js";
 import * as news from "../providers/news.js";
+import * as goldtraders from "../providers/goldtraders.js";
 
 export const marketRouter = Router();
 
 const QUOTE_TTL = 1_000;
 const HISTORY_TTL = 20_000;
 const NEWS_TTL = 60_000;
+const GOLD_TTL = 60_000;
+
+/** Nasdaq only covers US listed names. Futures, FX, SET, and indexes go to Yahoo. */
+function skipNasdaq(symbol: string): boolean {
+  return symbol.includes("=") || symbol.endsWith(".BK") || symbol.startsWith("^");
+}
 
 function fail(req: any, res: any, err: unknown) {
   const detail = err instanceof Error ? err.message : String(err);
@@ -53,11 +60,14 @@ async function getQuotes(symbols: string[]): Promise<yahoo.Quote[]> {
     remaining = remaining.filter((s) => !fetched.has(s));
   }
 
-  const nasdaqResults = await Promise.allSettled(remaining.map((s) => nasdaq.quote(s)));
-  nasdaqResults.forEach((r, i) => {
-    if (r.status === "fulfilled") fetched.set(remaining[i], r.value);
-  });
-  remaining = remaining.filter((s) => !fetched.has(s));
+  const nasdaqSymbols = remaining.filter((s) => !skipNasdaq(s));
+  if (nasdaqSymbols.length > 0) {
+    const nasdaqResults = await Promise.allSettled(nasdaqSymbols.map((s) => nasdaq.quote(s)));
+    nasdaqResults.forEach((r, i) => {
+      if (r.status === "fulfilled") fetched.set(nasdaqSymbols[i], r.value);
+    });
+    remaining = remaining.filter((s) => !fetched.has(s));
+  }
 
   if (remaining.length > 0) {
     try {
@@ -143,11 +153,18 @@ marketRouter.get("/history/:symbol", async (req, res) => {
     const data = await cached(`history:${symbol}:${rangeKey}`, HISTORY_TTL, () =>
       binance.CRYPTO_SYMBOLS.has(symbol)
         ? binance.history(symbol, rangeKey)
-        : withFallback([
-            ["nasdaq", () => nasdaq.history(symbol, rangeKey)],
-            ["yahoo", () => yahoo.history(symbol, yahooRange(rangeKey).range, yahooRange(rangeKey).interval)],
-            ["stooq", () => stooq.history(symbol)],
-          ])
+        : withFallback(
+            skipNasdaq(symbol)
+              ? [
+                  ["yahoo", () => yahoo.history(symbol, yahooRange(rangeKey).range, yahooRange(rangeKey).interval)],
+                  ["stooq", () => stooq.history(symbol)],
+                ]
+              : [
+                  ["nasdaq", () => nasdaq.history(symbol, rangeKey)],
+                  ["yahoo", () => yahoo.history(symbol, yahooRange(rangeKey).range, yahooRange(rangeKey).interval)],
+                  ["stooq", () => stooq.history(symbol)],
+                ]
+          )
     );
     if (!Array.isArray(data) || data.length === 0) throw new Error("empty history from all providers");
     res.json(data);
@@ -339,6 +356,42 @@ marketRouter.get("/macro", async (req, res) => {
 
     if (yields.length === 0 && indexes.length === 0) throw new Error("no macro data from any provider");
     res.json({ yields, vix: vix?.value ?? null, indexes });
+  } catch (err) {
+    fail(req, res, err);
+  }
+});
+
+const COMMODITY_QUOTES: Record<string, string> = {
+  "XAUUSD=X": "Gold spot (XAU)",
+  GLD: "Gold ETF (GLD)",
+  "CL=F": "WTI crude",
+  "BZ=F": "Brent crude",
+};
+
+marketRouter.get("/commodities", async (req, res) => {
+  try {
+    const [thai, quotes] = await Promise.all([
+      cached("goldtraders:latest", GOLD_TTL, () => goldtraders.latest()).catch(() => null),
+      getQuotes(Object.keys(COMMODITY_QUOTES)),
+    ]);
+    const board = quotes.map((q) => ({
+      symbol: q.symbol,
+      label: COMMODITY_QUOTES[q.symbol] ?? q.symbol,
+      price: q.price,
+      changePercent: q.changePercent,
+      currency: q.currency,
+    }));
+    if (!thai && board.length === 0) throw new Error("no commodity data from any provider");
+    res.json({
+      thai: thai
+        ? {
+            asOf: thai.asOf,
+            bar: { label: "Gold bar 96.5%", unit: "THB/baht", ...thai.bar },
+            jewelry: { label: "Jewelry 96.5%", unit: "THB/baht", ...thai.jewelry },
+          }
+        : null,
+      quotes: board,
+    });
   } catch (err) {
     fail(req, res, err);
   }

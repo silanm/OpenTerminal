@@ -35,7 +35,7 @@ export default function PortfolioWidget() {
   const symbols = positions.map((p) => p.symbol);
   const { data: quotes = [] } = useQuery({
     queryKey: ["pf-quotes", symbols.join(",")],
-    queryFn: () => apiGet<Quote[]>(`/api/quotes?symbols=${symbols.join(",")}`),
+    queryFn: () => apiGet<Quote[]>(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`),
     enabled: symbols.length > 0,
     refetchInterval: 30_000,
   });

@@ -15,7 +15,7 @@ export default function WatchlistWidget() {
 
   const { data = [] } = useQuery({
     queryKey: ["watchlist", watchlist.join(",")],
-    queryFn: () => apiGet<Quote[]>(`/api/quotes?symbols=${watchlist.join(",")}`),
+    queryFn: () => apiGet<Quote[]>(`/api/quotes?symbols=${encodeURIComponent(watchlist.join(","))}`),
     enabled: watchlist.length > 0,
     refetchInterval: 1_000,
   });

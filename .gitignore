@@ -1,8 +1,25 @@
+# Build
 node_modules/
 .next/
 dist/
-*.log
+
+# Env & logs
 .env
 .env.local
-data/*.db
+*.log
+
+# OS & local data
 .DS_Store
+data/*.db
+
+# Editor / agent local config
+/.codex/
+/.cursor/
+/.pi/
+/opencode.json
+/.mcp.json
+
+# OpenKnowledge managed skill copies
+.claude/skills/open-knowledge/
+.github/skills/open-knowledge/
+.opencode/skills/open-knowledge/

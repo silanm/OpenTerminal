@@ -17,7 +17,8 @@ export type WidgetType =
   | "ai"
   | "tape"
   | "tv"
-  | "recap";
+  | "recap"
+  | "commodities";
 
 export type WidgetInstance = {
   id: string;
@@ -52,6 +53,7 @@ const DEFAULT_WIDGETS: WidgetInstance[] = [
   { id: "w-watchlist", type: "watchlist", linked: false },
   { id: "w-news", type: "news", linked: true },
   { id: "w-macro", type: "macro", linked: false },
+  { id: "w-commodities", type: "commodities", linked: false },
 ];
 
 const DEFAULT_LAYOUT: LayoutItem[] = [
@@ -60,6 +62,7 @@ const DEFAULT_LAYOUT: LayoutItem[] = [
   { i: "w-watchlist", x: 7, y: 6, w: 5, h: 6 },
   { i: "w-news", x: 0, y: 12, w: 7, h: 7 },
   { i: "w-macro", x: 7, y: 12, w: 5, h: 7 },
+  { i: "w-commodities", x: 0, y: 19, w: 7, h: 10 },
 ];
 
 const SIZE_BY_TYPE: Record<WidgetType, { w: number; h: number }> = {
@@ -77,6 +80,7 @@ const SIZE_BY_TYPE: Record<WidgetType, { w: number; h: number }> = {
   tape: { w: 4, h: 10 },
   tv: { w: 6, h: 11 },
   recap: { w: 5, h: 12 },
+  commodities: { w: 6, h: 10 },
 };
 
 export const useTerminal = create<TerminalState>()(
