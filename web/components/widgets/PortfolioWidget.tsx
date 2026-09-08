@@ -6,7 +6,7 @@ import { apiGet, apiPost, apiDelete, fmt, pctClass, type Quote } from "../../lib
 
 type Portfolio = { id: number; name: string };
 type Position = { symbol: string; quantity: number; avgCost: number; realizedPnl: number };
-type Tx = { id: number; symbol: string; side: string; quantity: number; price: number; executed_at: string };
+type Tx = { id: number; symbol: string; side: string; quantity: number; price: number; executed_at: string; realizedPnl: number | null };
 
 export default function PortfolioWidget() {
   const qc = useQueryClient();
@@ -132,7 +132,7 @@ export default function PortfolioWidget() {
       ) : (
         <table className="data-table">
           <thead>
-            <tr><th>Date</th><th>Sym</th><th>Side</th><th>Qty</th><th>Price</th><th></th></tr>
+            <tr><th>Date</th><th>Sym</th><th>Side</th><th>Qty</th><th>Price</th><th>PnL</th><th></th></tr>
           </thead>
           <tbody>
             {txs.map((t) => (
@@ -142,6 +142,7 @@ export default function PortfolioWidget() {
                 <td className={t.side === "BUY" ? "up" : "down"}>{t.side}</td>
                 <td>{fmt(t.quantity, 4)}</td>
                 <td>{fmt(t.price)}</td>
+                <td className={pctClass(t.realizedPnl)}>{fmt(t.realizedPnl)}</td>
                 <td>
                   <button
                     className="dim hover:text-[var(--down)]"

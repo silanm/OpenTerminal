@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db.js";
+import { replayLots, type TxInput } from "../portfolioLots.js";
 
 export const portfolioRouter = Router();
 
@@ -34,11 +35,12 @@ const txSchema = z.object({
 });
 
 portfolioRouter.get("/:id/transactions", (req, res) => {
-  res.json(
-    db
-      .prepare("SELECT * FROM transactions WHERE portfolio_id = ? ORDER BY executed_at DESC, id DESC")
-      .all(req.params.id)
-  );
+  const txs = db
+    .prepare("SELECT * FROM transactions WHERE portfolio_id = ? ORDER BY executed_at DESC, id DESC")
+    .all(req.params.id) as TxInput[];
+  const { annotatedTxs } = replayLots(txs);
+  const byId = new Map(annotatedTxs.map((t) => [t.id, t]));
+  res.json(txs.map((t) => byId.get(t.id)!));
 });
 
 portfolioRouter.post("/:id/transactions", (req, res) => {
@@ -58,33 +60,10 @@ portfolioRouter.delete("/:id/transactions/:txId", (req, res) => {
   res.status(204).end();
 });
 
-/** Aggregated positions with average cost and realized PnL (FIFO-free, average-cost method). */
+/** Aggregated positions with FIFO-matched realized PnL. */
 portfolioRouter.get("/:id/positions", (req, res) => {
   const txs = db
     .prepare("SELECT * FROM transactions WHERE portfolio_id = ? ORDER BY executed_at, id")
-    .all(req.params.id) as Array<{ symbol: string; side: string; quantity: number; price: number }>;
-
-  const positions = new Map<string, { qty: number; avgCost: number; realizedPnl: number }>();
-  for (const tx of txs) {
-    let p = positions.get(tx.symbol);
-    if (!p) {
-      p = { qty: 0, avgCost: 0, realizedPnl: 0 };
-      positions.set(tx.symbol, p);
-    }
-    if (tx.side === "BUY") {
-      const totalCost = p.avgCost * p.qty + tx.price * tx.quantity;
-      p.qty += tx.quantity;
-      p.avgCost = p.qty > 0 ? totalCost / p.qty : 0;
-    } else {
-      const sold = Math.min(tx.quantity, p.qty);
-      p.realizedPnl += (tx.price - p.avgCost) * sold;
-      p.qty -= sold;
-      if (p.qty === 0) p.avgCost = 0;
-    }
-  }
-  res.json(
-    [...positions.entries()]
-      .filter(([, p]) => p.qty > 0 || p.realizedPnl !== 0)
-      .map(([symbol, p]) => ({ symbol, quantity: p.qty, avgCost: p.avgCost, realizedPnl: p.realizedPnl }))
-  );
+    .all(req.params.id) as TxInput[];
+  res.json(replayLots(txs).positions);
 });
